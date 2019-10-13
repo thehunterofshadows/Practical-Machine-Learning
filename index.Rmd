@@ -1,0 +1,67 @@
+---
+title: "Determine Workout Class"
+author: "Justin Pizzino"
+date: "10/13/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. The goal of this project will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants, to predict the manner in which they did the exercise.
+
+## Load Libraries
+```{r libs}
+library(data.table)
+library(caret)
+library(randomForest)
+library(rpart)
+library(rattle)
+```
+
+
+## Load and clean data.  By handling the NA's upfront we are speeding up our research.
+```{r clean}
+trainDL<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+testDL<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+
+keep <- names(trainDL[,colSums(is.na(trainDL)) == 0])[8:59]
+trainDL <- trainDL[,c(keep,"classe")]
+testDL <- testDL[,c(keep,"problem_id")]
+```
+
+## Create training and test setup from training data, using 60%.
+```{r sets}
+training<-createDataPartition(trainDL$classe, p=0.6, list=FALSE)
+myTrain<-trainDL[training, ]
+myTest<-trainDL[-training, ]
+```
+
+## Create a random forest prediction, using cross validation
+```{r RF}
+set.seed(4564)
+modRF<-randomForest(classe ~., data=myTrain, ntree=1500)
+```
+
+## Let's review the out of sample accuracy of the random forest: 99%
+```{r testRF}
+predRF<-predict(modRF, myTest, type="class")
+confusionMatrix(predRF,myTest$classe)
+```
+
+## Create a decision tree
+```{r DC}
+set.seed(4564)
+modDT<-rpart(classe ~ ., data = myTrain, method = "class")
+fancyRpartPlot(modDT)
+```
+
+## Let's review out of sample accuracy of the decision tree: 75%
+```{r testDC}
+predDC <- predict(modDT, myTest, type = "class")
+confusionMatrix(predDC, myTest$classe)
+```
+
+## Based on this the random forest method appears to tbe the better method, and that will be used for the quiz. Based on the number of variables and the data being used a decidion tree, and random forest were the best choices.
