@@ -9,20 +9,21 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Overview
+## 1. Overview
 One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. The goal of this project will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants, to predict the manner in which they did the exercise.
 
-## Load Libraries
+## 2. Load Libraries
 ```{r libs}
 library(data.table)
 library(caret)
 library(randomForest)
 library(rpart)
 library(rattle)
+library(corrplot)
 ```
 
 
-## Load and clean data.  By handling the NA's upfront we are speeding up our research.
+## 3. Load and clean data.  By handling the NA's upfront we are speeding up our research.  Any missing data will be convered to NA's.  Then we will remove the columns we don't need for this effort, ones with out valuable data.
 ```{r clean}
 trainDL<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings=c("NA","#DIV/0!",""))
 testDL<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
@@ -32,36 +33,43 @@ trainDL <- trainDL[,c(keep,"classe")]
 testDL <- testDL[,c(keep,"problem_id")]
 ```
 
-## Create training and test setup from training data, using 60%.
+## 4. Create training and test setup from training data, using 60%.
 ```{r sets}
 training<-createDataPartition(trainDL$classe, p=0.6, list=FALSE)
 myTrain<-trainDL[training, ]
 myTest<-trainDL[-training, ]
 ```
 
-## Create a random forest prediction, using cross validation
+## 5. Using corrplot shows that there is not a strong enough coorllation between any of the variables to remove them.  So all variables will be used in both models.
+```{r corrPlot}
+myCor <- cor(myTrain[, -53])
+corrplot(myCor, order = "FPC", method = "color", type = "lower", 
+         tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+```
+
+## 6. The first model I chose is random forest as they work well with factor results.  I also set the sead for repeatable results.
 ```{r RF}
 set.seed(4564)
 modRF<-randomForest(classe ~., data=myTrain, ntree=1500)
 ```
 
-## Let's review the out of sample accuracy of the random forest: 99%
+### 6.1 Let's review the out of sample accuracy of the random forest: 99%
 ```{r testRF}
 predRF<-predict(modRF, myTest, type="class")
 confusionMatrix(predRF,myTest$classe)
 ```
 
-## Create a decision tree
-```{r DC}
+## 7. Next I boosted the results to see if I would get a more accurate prediction.  
+```{r GBM}
 set.seed(4564)
-modDT<-rpart(classe ~ ., data = myTrain, method = "class")
-fancyRpartPlot(modDT)
+control<-trainControl(method = "repeatedcv", number = 5, repeats =1)
+modGBM<-train(classe~.,data=myTrain,method="gbm",verbose=FALSE, trControl=control)
 ```
 
-## Let's review out of sample accuracy of the decision tree: 75%
-```{r testDC}
-predDC <- predict(modDT, myTest, type = "class")
-confusionMatrix(predDC, myTest$classe)
+### 7.1 Let's review out of sample accuracy of the decision tree: 96%.  This actually results in a lower out of sample accuracy, and won't be used for the quiz.
+```{r testGBM}
+predGBM<-predict(modGBM,newdata=myTest)
+confusionMatrix(predGBM, myTest$classe)
 ```
 
-## Based on this the random forest method appears to tbe the better method, and that will be used for the quiz. Based on the number of variables and the data being used a decidion tree, and random forest were the best choices.
+## 8. Based on this the random forest method appears to the the better method, and that will be used for the quiz.
